@@ -1,5 +1,4 @@
 import socket
-from unittest import result
 
 
 def banner():
@@ -22,8 +21,9 @@ def printHelp(code):
             print("  banner: Prints the banner.")
             print("\n  set: Changes an option before scanning:")
             print("       minip: The minimum ip to start scanning.")
-            print("       maxip: The maximum ip, las one to be scanned.")
+            print("       maxip: The maximum ip, last one to be scanned.")
             print("       ports: Ports to check if they are open on each ip.")
+            print("       timeout: Time in seconds to give up the connection to a port.")
             print("\n  show: Shows the option values.")
             print("\n  scout: Starts the scan.")
             print("\n  exit: Closes the program.")
@@ -36,6 +36,10 @@ def printHelp(code):
             print("  ERROR: maxip is not higher than minip")
         case 4:
             print("  ERROR: Missing arguments")
+        case 5:
+            print("  ERROR: Timeout must be a positive number")
+        case 6:
+            print("  ERROR: There is a port that is not a number")
 
 
 def joinIPList(list):
@@ -60,7 +64,15 @@ def validIP(IP):
 
 def validPortRange(portRange):
     # Validates all port numbers for user input.
-    return all(0 <= int(i) <= 65535 for i in portRange)
+    try:
+        if all(0 <= int(i) <= 65535 for i in portRange):
+            return True
+        else:
+            printHelp(2)
+            return False
+    except ValueError:
+        printHelp(6)
+        return False
 
 
 def checkIP_and_Port(sock, IP, port, timeout):
@@ -94,6 +106,7 @@ command = parsed[0]
 
 ipmin = ipmax = '127.0.0.1'
 ports = [80, 443]
+timeout = 2
 
 while command != "exit":
     if command == "banner":
@@ -115,18 +128,27 @@ while command != "exit":
                     printHelp(1)
             except IndexError:
                 printHelp(4)
+        elif parsed[1] == "timeout":
+            try:
+                if int(parsed[2]) > 0:
+                    timeout = int(parsed[2])
+                else:
+                    printHelp(5)
+            except IndexError:
+                printHelp(4)
+            except ValueError:
+                printHelp(5)
         elif parsed[1] == "ports" or parsed[1] == "port":
             if(validPortRange(parsed[2:])):
                 ports.clear()
                 for i in parsed[2:]:
                     ports.append(int(i))
-            else:
-                printHelp(2)
     elif command == "show":
         print("\n")
         print("       Minimum IP:  ", ipmin)
         print("       Maximum IP:  ", ipmax)
         print("       Ports:       ", ports)
+        print("       Timeout:     ", timeout)
         print("\n")
     elif command == "scout":
         # Convert the string ip values to a list of ints so we can add...
@@ -138,6 +160,7 @@ while command != "exit":
             maxSplit.append(int(i))
         # Check if the maxip number is actually bigger than the minip.
         if isMaxIp(minSplit, maxSplit):
+            print("\n")
             # Create a Dictionary to save results and print only those that have open ports:
             resultDict = {}
             hasOpenPort = False
@@ -150,7 +173,7 @@ while command != "exit":
                 hasOpenPort = False
                 portList = []
                 for i in ports:
-                    if checkIP_and_Port(sock, joinIPList(minSplit), i, 2):
+                    if checkIP_and_Port(sock, joinIPList(minSplit), i, timeout):
                         hasOpenPort = True
                         portList.append(i)
                 if hasOpenPort:
@@ -174,13 +197,14 @@ while command != "exit":
                 hasOpenPort = False
                 portList = []
                 for i in ports:
-                    if checkIP_and_Port(sock, joinIPList(minSplit), i, 2):
+                    if checkIP_and_Port(sock, joinIPList(minSplit), i, timeout):
                         hasOpenPort = True
                         portList.append(i)
                 if hasOpenPort:
                     resultDict[joinIPList(minSplit)] = portList
                 sock.close()
             print(resultDict)
+            print("\n")
         else:
             printHelp(3)
     else:
