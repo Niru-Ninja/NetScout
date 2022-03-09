@@ -1,4 +1,5 @@
 import socket
+import threading
 
 
 def banner():
@@ -24,6 +25,7 @@ def printHelp(code):
             print("       maxip: The maximum ip, last one to be scanned.")
             print("       ports: Ports to check if they are open on each ip.")
             print("       timeout: Time in seconds to give up the connection to a port.")
+            print("       threads: Number of threads to scan an ip range.")
             print("\n  show: Shows the option values.")
             print("\n  scout: Starts the scan.")
             print("\n  exit: Closes the program.")
@@ -40,6 +42,8 @@ def printHelp(code):
             print("  ERROR: Timeout must be a positive number")
         case 6:
             print("  ERROR: There is a port that is not a number")
+        case 7:
+            print("  ERROR: Number of threads should be >= 1")
 
 
 def joinIPList(list):
@@ -85,6 +89,66 @@ def checkIP_and_Port(sock, IP, port, timeout):
         return False
 
 
+def ip_add1(minSplit, maxSplit):
+    minSplit[3] = minSplit[3] + 1
+    if minSplit[3] > 255:
+        minSplit[3] = 0
+        minSplit[2] = minSplit[2] + 1
+        if minSplit[2] > 255:
+            minSplit[2] = 0
+            minSplit[1] = minSplit[1] + 1
+            if minSplit[1] > 255:
+                minSplit[1] = 0
+                minSplit[0] = minSplit[0] + 1
+                if minSplit[0] > maxSplit[0]:
+                    return -1
+    return minSplit
+
+
+def thread_Check_IP_Range(minSplit, maxSplit, ports, timeout):
+    global resultDict
+    # Cycle to check all the IPs on a range:
+    while(joinIPList(maxSplit) != joinIPList(minSplit)):
+        # Start the socket to check the ports.
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            # Check an individual IP:
+            hasOpenPort = False
+            portList = []
+            for i in ports:
+                if checkIP_and_Port(sock, joinIPList(minSplit), i, timeout):
+                    hasOpenPort = True
+                    portList.append(i)
+            if hasOpenPort:
+                resultDict[joinIPList(minSplit)] = portList
+            # Move on to the next IP:
+            minSplit = ip_add1(minSplit, maxSplit)
+            if(minSplit == -1):
+                break
+            sock.close()
+        except:
+            print("Socket Failed")
+            minSplit = ip_add1(minSplit, maxSplit)
+            pass
+    if joinIPList(maxSplit) == joinIPList(minSplit):
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            hasOpenPort = False
+            portList = []
+            for i in ports:
+                if checkIP_and_Port(sock, joinIPList(minSplit), i, timeout):
+                    hasOpenPort = True
+                    portList.append(i)
+            if hasOpenPort:
+                resultDict[joinIPList(minSplit)] = portList
+            sock.close()
+        except:
+            print("Socket Failed")
+            minSplit = ip_add1(minSplit, maxSplit)
+            pass
+    return
+
+
 def isMaxIp(minIP, maxIP):
     # Returns True if maxIP >= minIP
     for i in range(3):
@@ -107,6 +171,10 @@ command = parsed[0]
 ipmin = ipmax = '127.0.0.1'
 ports = [80, 443]
 timeout = 2
+threadNum = 1
+
+# Create a Dictionary to save results and print only those that have open ports:
+resultDict = {}
 
 while command != "exit":
     if command == "banner":
@@ -143,66 +211,98 @@ while command != "exit":
                 ports.clear()
                 for i in parsed[2:]:
                     ports.append(int(i))
+        elif parsed[1] == "threads" or parsed[1] == "thread":
+            if(int(parsed[2]) >= 1):
+                threadNum = int(parsed[2])
+            else:
+                printHelp(7)
+
     elif command == "show":
         print("\n")
         print("       Minimum IP:  ", ipmin)
         print("       Maximum IP:  ", ipmax)
         print("       Ports:       ", ports)
         print("       Timeout:     ", timeout)
+        print("       Threads:     ", threadNum)
         print("\n")
-    elif command == "scout":
+    elif command == "scout" or command == "scan":
         # Convert the string ip values to a list of ints so we can add...
-        minSplit = []
-        maxSplit = []
-        for i in ipmin.split("."):
-            minSplit.append(int(i))
-        for i in ipmax.split("."):
-            maxSplit.append(int(i))
+        minSplit = list(map(lambda a: int(a), ipmin.split(".")))
+        maxSplit = list(map(lambda a: int(a), ipmax.split(".")))
         # Check if the maxip number is actually bigger than the minip.
         if isMaxIp(minSplit, maxSplit):
             print("\n")
-            # Create a Dictionary to save results and print only those that have open ports:
-            resultDict = {}
             hasOpenPort = False
             portList = []
-            # Start the socket to check the ports.
-            # Cycle to check all the IPs on a range:
+            # Array containing all the ips that the user wants to scan.
+            iparr = []
             while(joinIPList(maxSplit) != joinIPList(minSplit)):
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                # Check an individual IP:
-                hasOpenPort = False
-                portList = []
-                for i in ports:
-                    if checkIP_and_Port(sock, joinIPList(minSplit), i, timeout):
-                        hasOpenPort = True
-                        portList.append(i)
-                if hasOpenPort:
-                    resultDict[joinIPList(minSplit)] = portList
-                # Move on to the next IP:
-                minSplit[3] = minSplit[3] + 1
-                if minSplit[3] > 255:
-                    minSplit[3] = 0
-                    minSplit[2] = minSplit[2] + 1
-                    if minSplit[2] > 255:
-                        minSplit[2] = 0
-                        minSplit[1] = minSplit[1] + 1
-                        if minSplit[1] > 255:
-                            minSplit[1] = 0
-                            minSplit[0] = minSplit[0] + 1
-                            if minSplit[0] > maxSplit[0]:
-                                break
-                sock.close()
-            if joinIPList(maxSplit) == joinIPList(minSplit):
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                hasOpenPort = False
-                portList = []
-                for i in ports:
-                    if checkIP_and_Port(sock, joinIPList(minSplit), i, timeout):
-                        hasOpenPort = True
-                        portList.append(i)
-                if hasOpenPort:
-                    resultDict[joinIPList(minSplit)] = portList
-                sock.close()
+                iparr.append(joinIPList(minSplit))
+                minSplit = ip_add1(minSplit, maxSplit)
+                if(minSplit == -1):
+                    break
+            if(minSplit != -1):
+                iparr.append(joinIPList(minSplit))
+            ipsPerThread = len(iparr) // threadNum
+            ipsRemaining = len(iparr) % threadNum
+            threadArr = []
+            counter = 0
+            if ipsPerThread == 1:
+                while counter < len(iparr):
+                    if(ipsRemaining > 0):
+                        thread = threading.Thread(target=thread_Check_IP_Range, args=[
+                            list(map(lambda a: int(a), iparr[counter].split("."))), 
+                            list(map(lambda a: int(a), iparr[counter+1].split("."))),
+                            ports, timeout])
+                        ipsRemaining -= 1
+                        counter += 2
+                    else:
+                        thread = threading.Thread(target=thread_Check_IP_Range, args=[
+                            list(map(lambda a: int(a), iparr[counter].split("."))), 
+                            list(map(lambda a: int(a), iparr[counter].split("."))),
+                            ports, timeout])
+                        counter += 1
+                thread.daemon = True
+                threadArr.append(thread)
+            else:
+                while counter < len(iparr):
+                    if(ipsRemaining > 0):
+                        try:
+                            thread = threading.Thread(target=thread_Check_IP_Range, args=[
+                                             list(map(lambda a: int(a), iparr[counter].split("."))),
+                                             list(map(lambda a: int(a), iparr[counter + ipsPerThread+1].split("."))),
+                                             ports, timeout])
+                            ipsRemaining -= 1
+                            counter += ipsPerThread + 1
+                        except IndexError:
+                            thread = threading.Thread(target=thread_Check_IP_Range, args=[
+                                             list(map(lambda a: int(a), iparr[counter].split("."))),
+                                             list(map(lambda a: int(a), iparr[len(iparr)-1].split("."))),
+                                             ports, timeout])
+                            thread.daemon = True
+                            threadArr.append(thread)
+                            break
+                    else:
+                        try:
+                            thread = threading.Thread(target=thread_Check_IP_Range, args=[
+                                             list(map(lambda a: int(a), iparr[counter].split("."))),
+                                             list(map(lambda a: int(a), iparr[counter + ipsPerThread].split("."))),
+                                             ports, timeout])
+                            counter += ipsPerThread
+                        except IndexError:
+                            thread = threading.Thread(target=thread_Check_IP_Range, args=[
+                                             list(map(lambda a: int(a), iparr[counter].split("."))),
+                                             list(map(lambda a: int(a), iparr[len(iparr)-1].split("."))),
+                                             ports, timeout])
+                            thread.daemon = True
+                            threadArr.append(thread)
+                            break
+                    thread.daemon = True
+                    threadArr.append(thread)
+            for t in threadArr:
+                t.start()
+            for t in threadArr:
+                t.join()
             print(resultDict)
             print("\n")
         else:
