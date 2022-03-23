@@ -1,5 +1,6 @@
 import socket
 import threading
+import ipaddress
 
 
 def banner():
@@ -103,6 +104,22 @@ def ip_add1(minSplit, maxSplit):
                 if minSplit[0] > maxSplit[0]:
                     return -1
     return minSplit
+
+
+def ip_add(minSplit, numToAdd):
+    # Adds a number to an ip list, for example:
+    #[127, 0, 0, 1] + 300 = [127, 0, 1, 45]
+    result = ipaddress.ip_address(joinIPList(minSplit)) + numToAdd
+    result = result.exploded
+    return list(map(lambda a: int(a), result.split(".")))
+
+
+def ip_diff(maxip, minip):
+    # Finds the difference between two ip lists, returns an int
+    tr_maxip = ipaddress.ip_address(joinIPList(maxip))
+    tr_minip = ipaddress.ip_address(joinIPList(minip))
+    result = int(tr_maxip) - int(tr_minip)
+    return result
 
 
 def thread_Check_IP_Range(minSplit, maxSplit, ports, timeout):
@@ -234,69 +251,45 @@ while command != "exit":
             print("\n")
             hasOpenPort = False
             portList = []
-            # Array containing all the ips that the user wants to scan.
-            iparr = []
-            while(joinIPList(maxSplit) != joinIPList(minSplit)):
-                iparr.append(joinIPList(minSplit))
-                minSplit = ip_add1(minSplit, maxSplit)
-                if(minSplit == -1):
-                    break
-            if(minSplit != -1):
-                iparr.append(joinIPList(minSplit))
-            ipsPerThread = len(iparr) // threadNum
-            ipsRemaining = len(iparr) % threadNum
+            # We have to calculate how many ips we need to scan:
+            totalIPnum = ip_diff(maxSplit, minSplit)
+            # Now we calculate how many ips we give to each thread:
+            ipsPerThread = totalIPnum // threadNum
+            ipsRemaining = totalIPnum % threadNum
             threadArr = []
             counter = 0
             if ipsPerThread == 1:
-                while counter < len(iparr):
+                while counter < totalIPnum:
                     if(ipsRemaining > 0):
                         thread = threading.Thread(target=thread_Check_IP_Range, args=[
-                            list(map(lambda a: int(a), iparr[counter].split("."))), 
-                            list(map(lambda a: int(a), iparr[counter+1].split("."))),
+                            ip_add(minSplit, counter), 
+                            ip_add(minSplit, counter+1),
                             ports, timeout])
                         ipsRemaining -= 1
                         counter += 2
                     else:
                         thread = threading.Thread(target=thread_Check_IP_Range, args=[
-                            list(map(lambda a: int(a), iparr[counter].split("."))), 
-                            list(map(lambda a: int(a), iparr[counter].split("."))),
+                            ip_add(minSplit, counter), 
+                            ip_add(minSplit, counter),
                             ports, timeout])
                         counter += 1
                 thread.daemon = True
                 threadArr.append(thread)
             else:
-                while counter < len(iparr):
+                while counter < totalIPnum:
                     if(ipsRemaining > 0):
-                        try:
-                            thread = threading.Thread(target=thread_Check_IP_Range, args=[
-                                             list(map(lambda a: int(a), iparr[counter].split("."))),
-                                             list(map(lambda a: int(a), iparr[counter + ipsPerThread+1].split("."))),
-                                             ports, timeout])
-                            ipsRemaining -= 1
-                            counter += ipsPerThread + 1
-                        except IndexError:
-                            thread = threading.Thread(target=thread_Check_IP_Range, args=[
-                                             list(map(lambda a: int(a), iparr[counter].split("."))),
-                                             list(map(lambda a: int(a), iparr[len(iparr)-1].split("."))),
-                                             ports, timeout])
-                            thread.daemon = True
-                            threadArr.append(thread)
-                            break
+                        thread = threading.Thread(target=thread_Check_IP_Range, args=[
+                                            ip_add(minSplit, counter),
+                                            ip_add(minSplit, counter+ipsPerThread+1),
+                                            ports, timeout])
+                        ipsRemaining -= 1
+                        counter += ipsPerThread + 1
                     else:
-                        try:
-                            thread = threading.Thread(target=thread_Check_IP_Range, args=[
-                                             list(map(lambda a: int(a), iparr[counter].split("."))),
-                                             list(map(lambda a: int(a), iparr[counter + ipsPerThread].split("."))),
+                        thread = threading.Thread(target=thread_Check_IP_Range, args=[
+                                             ip_add(minSplit, counter),
+                                             ip_add(minSplit, counter+ipsPerThread),
                                              ports, timeout])
-                            counter += ipsPerThread
-                        except IndexError:
-                            thread = threading.Thread(target=thread_Check_IP_Range, args=[
-                                             list(map(lambda a: int(a), iparr[counter].split("."))),
-                                             list(map(lambda a: int(a), iparr[len(iparr)-1].split("."))),
-                                             ports, timeout])
-                            thread.daemon = True
-                            threadArr.append(thread)
-                            break
+                        counter += ipsPerThread
                     thread.daemon = True
                     threadArr.append(thread)
             for t in threadArr:
