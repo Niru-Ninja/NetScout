@@ -254,6 +254,7 @@ while command != "exit":
             # We have to calculate how many ips we need to scan:
             totalIPnum = ip_diff(maxSplit, minSplit)
             # Now we calculate how many ips we give to each thread:
+            if threadNum > totalIPnum: threadNum = totalIPnum # Higher number of threads than ips to scan would be a waste...
             ipsPerThread = totalIPnum // threadNum
             ipsRemaining = totalIPnum % threadNum
             threadArr = []
