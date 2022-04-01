@@ -26,8 +26,8 @@ def printHelp(code):
             print("       maxip: The maximum ip, last one to be scanned.")
             print("       ports: Ports to check if they are open on each ip.")
             print("       timeout: Time in seconds to give up the connection to a port.")
-            print("       threads: Number of threads to scan an ip range.")
-            print("\n  show: Shows the option values.")
+            print("       threads: Maximum number of threads to scan the ip range.")
+            print("\n  show: Shows the option values. You can also use 'show results' to see the previous scan results.")
             print("\n  scout: Starts the scan.")
             print("\n  exit: Closes the program.")
             print("\n")
@@ -118,7 +118,7 @@ def ip_diff(maxip, minip):
     # Finds the difference between two ip lists, returns an int
     tr_maxip = ipaddress.ip_address(joinIPList(maxip))
     tr_minip = ipaddress.ip_address(joinIPList(minip))
-    result = int(tr_maxip) - int(tr_minip)
+    result = int(tr_maxip) - int(tr_minip) + 1
     return result
 
 
@@ -187,7 +187,8 @@ command = parsed[0]
 
 ipmin = ipmax = '127.0.0.1'
 ports = [80, 443]
-timeout = 2
+timeout = 1
+maxThreadNum = 1
 threadNum = 1
 
 # Create a Dictionary to save results and print only those that have open ports:
@@ -197,7 +198,7 @@ while command != "exit":
     if command == "banner":
         banner()
     elif command == "set":
-        if parsed[1] == "minip":
+        if parsed[1] == "minip" or parsed[1] == "min":
             try:
                 if(validIP(parsed[2])):
                     ipmin = parsed[2]
@@ -205,7 +206,7 @@ while command != "exit":
                     printHelp(1)
             except IndexError:
                 printHelp(4)
-        elif parsed[1] == "maxip":
+        elif parsed[1] == "maxip" or parsed[1] == "max":
             try:
                 if(validIP(parsed[2])):
                     ipmax = parsed[2]
@@ -230,17 +231,20 @@ while command != "exit":
                     ports.append(int(i))
         elif parsed[1] == "threads" or parsed[1] == "thread":
             if(int(parsed[2]) >= 1):
-                threadNum = int(parsed[2])
+                maxThreadNum = int(parsed[2])
             else:
                 printHelp(7)
 
     elif command == "show":
         print("\n")
-        print("       Minimum IP:  ", ipmin)
-        print("       Maximum IP:  ", ipmax)
-        print("       Ports:       ", ports)
-        print("       Timeout:     ", timeout)
-        print("       Threads:     ", threadNum)
+        if len(parsed)>1 and (parsed[1] == "result" or parsed[1] == "results"): 
+            print(resultDict)
+        else:
+            print("       Minimum IP:  ", ipmin)
+            print("       Maximum IP:  ", ipmax)
+            print("       Ports:       ", ports)
+            print("       Timeout:     ", timeout)
+            print("       Threads:     ", maxThreadNum)
         print("\n")
     elif command == "scout" or command == "scan":
         # Convert the string ip values to a list of ints so we can add...
@@ -248,17 +252,21 @@ while command != "exit":
         maxSplit = list(map(lambda a: int(a), ipmax.split(".")))
         # Check if the maxip number is actually bigger than the minip.
         if isMaxIp(minSplit, maxSplit):
-            print("\n")
-            hasOpenPort = False
-            portList = []
             # We have to calculate how many ips we need to scan:
             totalIPnum = ip_diff(maxSplit, minSplit)
+            # Higher number of threads than ips to scan would be a waste...
+            if maxThreadNum > totalIPnum: threadNum = totalIPnum
+            else: threadNum = maxThreadNum
+            # Inform the number of threads to be used and clear the dictionary for the next scan:
+            if threadNum == 1: print("   Using " + str(threadNum) + " thread to scan...\n")
+            else: print("   Using " + str(threadNum) + " threads to scan...\n")
+            resultDict.clear()
             # Now we calculate how many ips we give to each thread:
-            if threadNum > totalIPnum: threadNum = totalIPnum # Higher number of threads than ips to scan would be a waste...
             ipsPerThread = totalIPnum // threadNum
             ipsRemaining = totalIPnum % threadNum
             threadArr = []
             counter = 0
+            # Setting up all the threads for scanning:
             if ipsPerThread == 1:
                 while counter < totalIPnum:
                     if(ipsRemaining > 0):
@@ -293,6 +301,7 @@ while command != "exit":
                         counter += ipsPerThread
                     thread.daemon = True
                     threadArr.append(thread)
+            # Running scan:
             for t in threadArr:
                 t.start()
             for t in threadArr:
