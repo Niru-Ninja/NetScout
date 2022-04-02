@@ -128,7 +128,6 @@ def ip_diff(maxip, minip):
 
 def thread_Check_IP_Range(minSplit, maxSplit, ports, timeout):
     global resultDict
-    print("  " + joinIPList(minSplit) + " - " + joinIPList(maxSplit))
     # Cycle to check all the IPs on a range:
     while(joinIPList(maxSplit) != joinIPList(minSplit)):
         # Start the socket to check the ports.
@@ -173,12 +172,7 @@ def thread_Check_IP_Range(minSplit, maxSplit, ports, timeout):
 
 def isMaxIp(minIP, maxIP):
     # Returns True if maxIP >= minIP
-    for i in range(3):
-        if maxIP[i] > minIP[i]:
-            return True
-        elif maxIP[i] < minIP[i]:
-            return False
-    return True
+    return ip_address(joinIPList(maxIP)) > ip_address(joinIPList(minIP))
 
 
 def parse(com):
@@ -299,12 +293,12 @@ while command != "exit":
             else: print("   Using " + str(threadNum) + " threads to scan...\n")
             resultDict.clear()
             # Now we calculate how many ips we give to each thread:
-            ipsPerThread = totalIPnum // threadNum
+            ipsPerThread = (totalIPnum // threadNum) - 1
             ipsRemaining = totalIPnum % threadNum
             threadArr = []
             counter = 0
             # Setting up all the threads for scanning:
-            if ipsPerThread == 1:
+            if ipsPerThread == 0:
                 while counter < totalIPnum:
                     if(ipsRemaining > 0):
                         thread = threading.Thread(target=thread_Check_IP_Range, args=[
@@ -329,13 +323,22 @@ while command != "exit":
                                             ip_add(minSplit, counter+ipsPerThread+1),
                                             ports, timeout])
                         ipsRemaining -= 1
-                        counter += ipsPerThread + 1
+                        counter += ipsPerThread + 2
                     else:
-                        thread = threading.Thread(target=thread_Check_IP_Range, args=[
-                                             ip_add(minSplit, counter),
-                                             ip_add(minSplit, counter+ipsPerThread),
-                                             ports, timeout])
-                        counter += ipsPerThread
+                        if counter + ipsPerThread + 1 > totalIPnum:
+                            thread = threading.Thread(target=thread_Check_IP_Range, args=[
+                                                ip_add(minSplit, counter),
+                                                maxSplit,
+                                                ports, timeout])
+                            thread.daemon = True
+                            threadArr.append(thread)
+                            break
+                        else:
+                            thread = threading.Thread(target=thread_Check_IP_Range, args=[
+                                                ip_add(minSplit, counter),
+                                                ip_add(minSplit, counter+ipsPerThread),
+                                                ports, timeout])
+                            counter += ipsPerThread + 1
                     thread.daemon = True
                     threadArr.append(thread)
             # Running scan:
