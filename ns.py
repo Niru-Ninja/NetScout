@@ -128,6 +128,7 @@ def ip_diff(maxip, minip):
 
 def thread_Check_IP_Range(minSplit, maxSplit, ports, timeout):
     global resultDict
+    print("  " + joinIPList(minSplit) + " - " + joinIPList(maxSplit))
     # Cycle to check all the IPs on a range:
     while(joinIPList(maxSplit) != joinIPList(minSplit)):
         # Start the socket to check the ports.
@@ -318,8 +319,8 @@ while command != "exit":
                             ip_add(minSplit, counter),
                             ports, timeout])
                         counter += 1
-                thread.daemon = True
-                threadArr.append(thread)
+                    thread.daemon = True
+                    threadArr.append(thread)
             else:
                 while counter < totalIPnum:
                     if(ipsRemaining > 0):
