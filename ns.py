@@ -1,6 +1,9 @@
 import socket
 import threading
-import ipaddress
+from ipaddress import ip_address
+
+from os.path import exists
+from json import dumps
 
 
 def banner():
@@ -27,6 +30,7 @@ def printHelp(code):
             print("       ports: Ports to check if they are open on each ip.")
             print("       timeout: Time in seconds to give up the connection to a port.")
             print("       threads: Maximum number of threads to scan the ip range.")
+            print("       file: File to save the results. Default is 'none' (Console output)")
             print("\n  show: Shows the option values. You can also use 'show results' to see the previous scan results.")
             print("\n  scout: Starts the scan.")
             print("\n  exit: Closes the program.")
@@ -109,15 +113,15 @@ def ip_add1(minSplit, maxSplit):
 def ip_add(minSplit, numToAdd):
     # Adds a number to an ip list, for example:
     #[127, 0, 0, 1] + 300 = [127, 0, 1, 45]
-    result = ipaddress.ip_address(joinIPList(minSplit)) + numToAdd
+    result = ip_address(joinIPList(minSplit)) + numToAdd
     result = result.exploded
     return list(map(lambda a: int(a), result.split(".")))
 
 
 def ip_diff(maxip, minip):
     # Finds the difference between two ip lists, returns an int
-    tr_maxip = ipaddress.ip_address(joinIPList(maxip))
-    tr_minip = ipaddress.ip_address(joinIPList(minip))
+    tr_maxip = ip_address(joinIPList(maxip))
+    tr_minip = ip_address(joinIPList(minip))
     result = int(tr_maxip) - int(tr_minip) + 1
     return result
 
@@ -177,7 +181,24 @@ def isMaxIp(minIP, maxIP):
 
 
 def parse(com):
-    return com.split(" ")
+    # The structure of a command is: COMMAND PARAMETER1 PARAMETER2 [...] PARAMETER-N
+	# The user can also use "" to simbolize that spaces are considered part of a parameter,
+    # Like this: COMMAND PARAMETER1 "STRING WITH SPACES AS PARAMETER2" PARAMETER3 [...]
+    com += " "
+    acum = ""
+    words = []
+
+    onsameword = False
+    for character in com:
+        if character == '"' or character == "'": 
+            onsameword = not onsameword
+            continue
+        if onsameword: acum += character
+        elif character != " ": acum += character
+        else:
+            words.append(acum)
+            acum = ""
+    return words
 
 
 banner()
@@ -190,6 +211,7 @@ ports = [80, 443]
 timeout = 1
 maxThreadNum = 1
 threadNum = 1
+filepath = 'none'
 
 # Create a Dictionary to save results and print only those that have open ports:
 resultDict = {}
@@ -234,6 +256,19 @@ while command != "exit":
                 maxThreadNum = int(parsed[2])
             else:
                 printHelp(7)
+        elif parsed[1] == 'file':
+            if parsed[2].lower() != 'none':
+                if exists(parsed[2]):
+                    print("\n")
+                    answer = input("  WARNING: " + parsed[2] + " already exists. Do you want to ovewrite it? y/n. ")
+                    answer = answer.lower()
+                    if answer == 'y' or answer == 'yes':
+                        filepath = parsed[2]
+                    print("\n")
+                else:
+                    filepath = parsed[2]
+            else:
+                filepath = 'none'
 
     elif command == "show":
         print("\n")
@@ -245,6 +280,7 @@ while command != "exit":
             print("       Ports:       ", ports)
             print("       Timeout:     ", timeout)
             print("       Threads:     ", maxThreadNum)
+            print("       File:        ", filepath)
         print("\n")
     elif command == "scout" or command == "scan":
         # Convert the string ip values to a list of ints so we can add...
@@ -306,8 +342,17 @@ while command != "exit":
                 t.start()
             for t in threadArr:
                 t.join()
-            print(resultDict)
-            print("\n")
+            # Showing the results or writing them in a file:
+            if filepath == 'none':
+                if resultDict:
+                    print(resultDict)
+                    print("\n")
+                else:
+                    print("  No open ports found.\n")
+            else:
+                outputFile = open(filepath, "w")
+                outputFile.write(dumps(resultDict))
+                outputFile.close()
         else:
             printHelp(3)
     else:
