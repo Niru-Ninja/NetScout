@@ -5,6 +5,8 @@ from ipaddress import ip_address
 from os.path import exists
 from json import dumps
 
+from time import sleep
+
 
 def banner():
     print('\n\n')
@@ -30,6 +32,11 @@ def printHelp(code):
             print("       ports: Ports to check if they are open on each ip.")
             print("       timeout: Time in seconds to give up the connection to a port.")
             print("       threads: Maximum number of threads to scan the ip range.")
+            print("       maxRangSize: Maximum size of range to scan. If a range has higher number of ips ")
+            print("                    than maxRangSize, it will be splitted in ranges of the thread number.")
+            print("                    This allows you to wait some time so the network doesnt crash while you scan.")
+            print("                    A value of 0 disables it.")
+            print("       chokeTime: Time in milliseconds to wait between the scans of ip ranges.")
             print("       file: File to save the results. Default is 'none' (Console output)")
             print("\n  show: Shows all the option values. IP range values could not show if the list is too long, use 'show range'.")
             print("       results: shows the previous scan results.")
@@ -56,6 +63,10 @@ def printHelp(code):
             print("  ERROR: Too many arguments")
         case 9:
             print("  ERROR: File doesnt exists.")
+        case 10:
+            print("  ERROR: Number of maxRangSize should be >= 0")
+        case 11:
+            print("  ERROR: Number of chokeTime should be >= 0")
 
 
 def joinIPList(list):
@@ -90,7 +101,9 @@ def validIPRange(range):
 def validIPRangeList(rangeList):
     boolAcum = True
     for r in rangeList:
-        boolAcum = boolAcum and validIPRange(r)
+        isRangeValid = validIPRange(r)
+        boolAcum = boolAcum and isRangeValid
+        if(not isRangeValid): print("\n  " + r + " is not a valid range.")
     return boolAcum
 
 
@@ -193,77 +206,61 @@ def thread_Check_IP_Range(minSplit, maxSplit, ports, timeout):
     return
 
 
-def start_scan(ipmin, ipmax, ports, timeout, maxThreadNum):
-    # Convert the string ip values to a list of ints so we can add...
-    minSplit = list(map(lambda a: int(a), ipmin.split(".")))
-    maxSplit = list(map(lambda a: int(a), ipmax.split(".")))
-    # Check if the maxip number is actually bigger than the minip.
-    if isMaxIp(minSplit, maxSplit):
-        # We have to calculate how many ips we need to scan:
-        totalIPnum = ip_diff(maxSplit, minSplit)
-        # Higher number of threads than ips to scan would be a waste...
-        if maxThreadNum > totalIPnum: threadNum = totalIPnum
-        else: threadNum = maxThreadNum
-        # Inform the number of threads to be used and clear the dictionary for the next scan:
-        if threadNum == 1: print("   Using " + str(threadNum) + " thread to scan "+ str(totalIPnum) + " IP...\n")
-        else: print("   Using " + str(threadNum) + " threads to scan " + str(totalIPnum) + " IP...\n")
-        # Now we calculate how many ips we give to each thread:
-        ipsPerThread = (totalIPnum // threadNum) - 1
-        ipsRemaining = totalIPnum % threadNum
-        threadArr = []
-        counter = 0
-        # Setting up all the threads for scanning:
-        if ipsPerThread == 0:
-            while counter < totalIPnum:
-                if(ipsRemaining > 0):
-                    thread = threading.Thread(target=thread_Check_IP_Range, args=[
-                        ip_add(minSplit, counter), 
-                        ip_add(minSplit, counter+1),
-                        ports, timeout])
-                    ipsRemaining -= 1
-                    counter += 2
-                else:
-                    thread = threading.Thread(target=thread_Check_IP_Range, args=[
-                        ip_add(minSplit, counter), 
-                        ip_add(minSplit, counter),
-                        ports, timeout])
-                    counter += 1
-                thread.daemon = True
-                threadArr.append(thread)
-        else:
-            while counter < totalIPnum:
-                if(ipsRemaining > 0):
+def start_scan(minSplit, maxSplit, totalIPnum, ports, timeout, threadNum):
+    # Now we calculate how many ips we give to each thread:
+    ipsPerThread = (totalIPnum // threadNum) - 1
+    ipsRemaining = totalIPnum % threadNum
+    threadArr = []
+    counter = 0
+    # Setting up all the threads for scanning:
+    if ipsPerThread == 0:
+        while counter < totalIPnum:
+            if(ipsRemaining > 0):
+                thread = threading.Thread(target=thread_Check_IP_Range, args=[
+                    ip_add(minSplit, counter), 
+                    ip_add(minSplit, counter+1),
+                    ports, timeout])
+                ipsRemaining -= 1
+                counter += 2
+            else:
+                thread = threading.Thread(target=thread_Check_IP_Range, args=[
+                    ip_add(minSplit, counter), 
+                    ip_add(minSplit, counter),
+                    ports, timeout])
+                counter += 1
+            thread.daemon = True
+            threadArr.append(thread)
+    else:
+        while counter < totalIPnum:
+            if(ipsRemaining > 0):
+                thread = threading.Thread(target=thread_Check_IP_Range, args=[
+                                    ip_add(minSplit, counter),
+                                    ip_add(minSplit, counter+ipsPerThread+1),
+                                    ports, timeout])
+                ipsRemaining -= 1
+                counter += ipsPerThread + 2
+            else:
+                if counter + ipsPerThread + 1 > totalIPnum:
                     thread = threading.Thread(target=thread_Check_IP_Range, args=[
                                         ip_add(minSplit, counter),
-                                        ip_add(minSplit, counter+ipsPerThread+1),
+                                        maxSplit,
                                         ports, timeout])
-                    ipsRemaining -= 1
-                    counter += ipsPerThread + 2
+                    thread.daemon = True
+                    threadArr.append(thread)
+                    break
                 else:
-                    if counter + ipsPerThread + 1 > totalIPnum:
-                        thread = threading.Thread(target=thread_Check_IP_Range, args=[
-                                            ip_add(minSplit, counter),
-                                            maxSplit,
-                                            ports, timeout])
-                        thread.daemon = True
-                        threadArr.append(thread)
-                        break
-                    else:
-                        thread = threading.Thread(target=thread_Check_IP_Range, args=[
-                                            ip_add(minSplit, counter),
-                                            ip_add(minSplit, counter+ipsPerThread),
-                                            ports, timeout])
-                        counter += ipsPerThread + 1
-                thread.daemon = True
-                threadArr.append(thread)
-        # Running scan:
-        for t in threadArr:
-            t.start()
-        for t in threadArr:
-            t.join()
-    else:
-        printHelp(3)
-
+                    thread = threading.Thread(target=thread_Check_IP_Range, args=[
+                                        ip_add(minSplit, counter),
+                                        ip_add(minSplit, counter+ipsPerThread),
+                                        ports, timeout])
+                    counter += ipsPerThread + 1
+            thread.daemon = True
+            threadArr.append(thread)
+    # Running scan:
+    for t in threadArr:
+        t.start()
+    for t in threadArr:
+        t.join()
 
 def isMaxIp(minIP, maxIP):
     # Returns True if maxIP >= minIP
@@ -302,6 +299,9 @@ timeout = 1
 maxThreadNum = 1
 threadNum = 1
 filepath = 'none'
+importFile = 'none'
+maxRangeSize = 300000
+chokeTime = 0
 
 # Create a Dictionary to save results and print only those that have open ports:
 resultDict = {}
@@ -310,7 +310,7 @@ while command != "exit":
     if command == "banner":
         banner()
     elif command == "set":
-        if parsed[1] == "range" or parsed[1] == "iprange" or parsed[1] == "ran" or parsed[1] == "rng":
+        if parsed[1] in ("range", "iprange", "ran", "rng"):
             if validIPRangeList(parsed[2:]): 
                 ipRange = parsed[2:]
             else:
@@ -325,12 +325,12 @@ while command != "exit":
                 printHelp(4)
             except ValueError:
                 printHelp(5)
-        elif parsed[1] == "ports" or parsed[1] == "port":
+        elif parsed[1] in ("ports", "port"):
             if(validPortRange(parsed[2:])):
                 ports.clear()
                 for i in parsed[2:]:
                     ports.append(int(i))
-        elif parsed[1] == "threads" or parsed[1] == "thread":
+        elif parsed[1] in ("threads", "thread"):
             try:
                 if(int(parsed[2]) >= 1):
                     maxThreadNum = int(parsed[2])
@@ -338,13 +338,29 @@ while command != "exit":
                     printHelp(7)
             except IndexError:
                 printHelp(4)
-        elif parsed[1] == 'file':
+        elif parsed[1] in ("maxRangSize", "maxRangeSize", "maxrangesize", "maxrangsize", "mrs"):
+            try:
+                if(int(parsed[2]) >= 0):
+                    maxRangeSize = int(parsed[2])
+                else:
+                    printHelp(10)
+            except IndexError:
+                printHelp(4)
+        elif parsed[1] in ("chokeTime", "choke", "choketime", "ct"):
+            try:
+                if(int(parsed[2]) >= 0):
+                    chokeTime = int(parsed[2])
+                else:
+                    printHelp(11)
+            except IndexError:
+                printHelp(4)
+        elif parsed[1] in ('file', 'outputfile', 'outputFile', 'output'):
             if parsed[2].lower() != 'none':
                 if exists(parsed[2]):
                     print("\n")
                     answer = input("  WARNING: " + parsed[2] + " already exists. Do you want to ovewrite it? y/n. ")
                     answer = answer.lower()
-                    if answer == 'y' or answer == 'yes':
+                    if answer in ('y', 'yes'):
                         filepath = parsed[2]
                     print("\n")
                 else:
@@ -355,22 +371,27 @@ while command != "exit":
     elif command == "show":
         print("\n")
         if len(parsed)>1:
-            if parsed[1] == "result" or parsed[1] == "results": 
+            if parsed[1] in ("result", "results"): 
                 print(resultDict)
-            elif parsed[1] == "range" or parsed[1] == "iprange" or parsed[1] == "ran" or parsed[1] == "rng":
+            elif parsed[1] in ("range", "iprange", "ran", "rng"):
                 for r in ipRange: 
                     print(r)
         else:
             if len(ipRange) < 4:
-                print("       Range:       ", ipRange)
-            print("       Ports:       ", ports)
-            print("       Timeout:     ", timeout)
-            print("       Threads:     ", maxThreadNum)
-            print("       File:        ", filepath)
+                print("       Range:          ", ipRange)
+            if importFile != "none":
+                print("       Range:          ", importFile)
+            print("       Ports:          ", ports)
+            print("       Timeout:        ", timeout)
+            print("       Threads:        ", maxThreadNum)
+            print("       Max range size: ", maxRangeSize)
+            print("       Choke Time:     ", chokeTime)
+            print("       Output File:    ", filepath)
         print("\n")
     elif command == "import":
         if len(parsed) == 2:
             if exists(parsed[1]):
+                importFile = parsed[1]
                 rangeFile = open(parsed[1], "r")
                 rangeList = rangeFile.readlines()
                 rangeFile.close()
@@ -385,13 +406,57 @@ while command != "exit":
             printHelp(4)
         else:
             printHelp(8)
-    elif command == "scout" or command == "scan" or command == "fire" or command == "run":
+    elif command in ("scout", "scan", "start", "fire", "run"):
         resultDict.clear()
         for r in ipRange:
             currentRange = r.split("-")
             ipmin = currentRange[0]
             ipmax = currentRange[1]
-            start_scan(ipmin, ipmax, ports, timeout, maxThreadNum)
+            # Convert the string ip values to a list of ints so we can add...
+            minSplit = list(map(lambda a: int(a), ipmin.split(".")))
+            maxSplit = list(map(lambda a: int(a), ipmax.split(".")))
+            # We have to calculate how many ips we need to scan:
+            totalIPnum = ip_diff(maxSplit, minSplit)
+            # Check if the maxip number is actually bigger than the minip.
+            if isMaxIp(minSplit, maxSplit):
+                # Higher number of threads than ips to scan would be a waste...
+                if maxThreadNum > totalIPnum: threadNum = totalIPnum
+                else: threadNum = maxThreadNum
+                # Inform the number of threads to be used:
+                print("  Scanning: " + ipmin + "-" + ipmax)
+                if threadNum == 1: print("   Using " + str(threadNum) + " thread to scan "+ str(totalIPnum) + " IP...\n")
+                else: print("   Using " + str(threadNum) + " threads to scan " + str(totalIPnum) + " IP...\n")
+                if(totalIPnum>maxRangeSize and maxRangeSize>0):
+                    metaIpList = []
+                    counter = threadNum
+                    ipsRemaining = totalIPnum % threadNum
+                    loopCount = 0
+                    ipCounter = minSplit
+                    metaIpList.append((ipCounter, ip_add(minSplit, counter)))
+                    counter += 1
+                    ipCounter = ip_add(minSplit, counter)
+                    counter += threadNum
+                    loopCount += 1
+                    while counter <= totalIPnum-ipsRemaining:
+                        metaIpList.append((ipCounter, ip_add(minSplit, counter)))
+                        counter += 1
+                        ipCounter = ip_add(minSplit, counter)
+                        counter += threadNum
+                        loopCount += 1
+                    ipsLeft = totalIPnum - (loopCount * threadNum) - loopCount
+                    if ipsLeft > 0:
+                        counter -= threadNum
+                        ipCounter = ip_add(minSplit, counter)
+                        metaIpList.append((ipCounter, ip_add(ipCounter, ipsLeft-1)))
+                    for rng in metaIpList:
+                        rangeSize = ip_diff(rng[0], rng[1])
+                        sleep(chokeTime/1000)
+                        start_scan(rng[0], rng[1], rangeSize, ports, timeout, threadNum)
+                    continue
+                sleep(chokeTime/1000)
+                start_scan(minSplit, maxSplit, totalIPnum, ports, timeout, threadNum)
+            else:
+                printHelp(3)
         # Showing the results or writing them in a file:
         if filepath == 'none':
             if resultDict:
