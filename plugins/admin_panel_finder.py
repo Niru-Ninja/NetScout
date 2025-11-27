@@ -54,7 +54,7 @@ def run(ip, open_ports, scan_id, save):
     for port in open_ports:
         for proto in ["http", "https"]:
             url = f"{proto}://{ip}:{port}"
-            print(f"[plugin admin_panel] chequeando {url}")
+            print(f"[plugin admin_panel] checking {url}")
 
             try:
                 resp = requests.get(url, timeout=4, verify=False, headers=UA)
@@ -88,11 +88,11 @@ def run(ip, open_ports, scan_id, save):
                     save(vendor, f"score={score}", ip)
                     already_reported.add(key)
 
-                    print(f"[plugin admin_panel] DETECTADO {vendor.upper()} en {ip} (score={score})")
+                    print(f"[plugin admin_panel] DETECTED {vendor.upper()} on {ip} (score={score})")
 
             # Si no coincidió con nada, guardar snapshot mínimo
             if not already_reported:
                 save("admin_panel_unknown", resp.text[:200], ip)
-                print(f"[plugin admin_panel] desconocido en {ip}")
+                print(f"[plugin admin_panel] unknown on {ip}")
 
     return

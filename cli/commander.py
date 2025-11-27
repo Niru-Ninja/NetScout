@@ -9,8 +9,19 @@ from core.plugins import load_plugins, make_save_function
 import os
 
 class ScannerCLI(Cmd):
-    intro = "Bienvenido a NetScout — escriba help o ? para ver comandos\n"
-    prompt = "(netscout) "
+    intro =r"""
+    
+      ▄▄    ▄ ▄▄▄▄▄▄▄ ▄▄▄▄▄▄▄    ▄▄▄▄▄▄▄ ▄▄▄▄▄▄▄ ▄▄▄▄▄▄▄ ▄▄   ▄▄ ▄▄▄▄▄▄▄ 
+     █  █  █ █       █       █  █       █       █       █  █ █  █       █
+     █   █▄█ █    ▄▄▄█▄     ▄█  █  ▄▄▄▄▄█       █   ▄   █  █ █  █▄     ▄█
+     █       █   █▄▄▄  █   █    █ █▄▄▄▄▄█     ▄▄█  █ █  █  █▄█  █ █   █  
+     █  ▄    █    ▄▄▄█ █   █    █▄▄▄▄▄  █    █  █  █▄█  █       █ █   █  
+     █ █ █   █   █▄▄▄  █   █     ▄▄▄▄▄█ █    █▄▄█       █       █ █   █  
+     █▄█  █▄▄█▄▄▄▄▄▄▄█ █▄▄▄█    █▄▄▄▄▄▄▄█▄▄▄▄▄▄▄█▄▄▄▄▄▄▄█▄▄▄▄▄▄▄█ █▄▄▄█  
+    
+    
+    """
+    prompt = " > "
 
     def __init__(self):
         super().__init__()
@@ -39,15 +50,23 @@ class ScannerCLI(Cmd):
     # --- SET COMMAND ---
     @with_argument_list
     def do_set(self, args):
+        """\n Set scanner options
+         Usage:
+            set ips <ip/range/file>
+            set ports <p1> <p2> ...
+            set timeout <secs>
+            set threads <n>
+            set rate <reqs_per_sec>
+        """
         if len(args) < 2:
-            self.perror("Uso: set <opcion> <valor>")
+            self.perror("Usage: set <option> <value>\n")
             return
 
         key = args[0]
         value = args[1:]
 
         if key not in self.settings:
-            self.perror(f"Opción desconocida: {key}")
+            self.perror(f"Unknown option: {key}")
             return
 
         # Conversión automática
@@ -71,7 +90,7 @@ class ScannerCLI(Cmd):
                             elif is_valid_ip(ip):
                                 new_ips.append(ip)
                             else:
-                                self.perror(f"IP inválida en archivo: {ip}")
+                                self.perror(f"Invalid IP in file: {ip}")
                     continue
 
                 # rango A-B
@@ -79,23 +98,31 @@ class ScannerCLI(Cmd):
                     try:
                         new_ips.extend(expand_range(item))
                     except Exception as e:
-                        self.perror(f"Rango inválido: {item} ({e})")
+                        self.perror(f"Invalid range: {item} ({e})")
                     continue
 
                 # IP suelta
                 if is_valid_ip(item):
                     new_ips.append(item)
                 else:
-                    self.perror(f"IP inválida: {item}")
+                    self.perror(f"Invalid IP: {item}")
 
             self.settings[key] = list(dict.fromkeys(new_ips))  # eliminar duplicados
-            self.poutput(f"{key} cargó {len(self.settings[key])} IPs")
+            self.poutput(f"{key} loaded {len(self.settings[key])} IPs")
 
 
         self.poutput(f"{key} = {self.settings[key]}")
 
     # --- SHOW OPTIONS ---
     def do_show(self, arg):
+        """\n Shows the current value of options, results, available scans and plugins.
+        Usage:
+            show options
+            show ips
+            show results
+            show scans
+            show plugins
+        """
         arg = arg.strip()
 
         if arg == "options":
@@ -110,25 +137,25 @@ class ScannerCLI(Cmd):
             scan_id = int(arg.split()[2])
             self._show_results_scan(scan_id)
         elif arg.strip() == "plugins":
-            self.poutput("\nPlugins disponibles:")
+            self.poutput("\nAvailable plugins:")
             for name in self.available_plugins:
                 mark = "[X]" if self.plugins[name]["enabled"] else "[ ]"
                 self.poutput(f" {mark} {name}")
             self.poutput("")
             return
         else:
-            self.perror("Uso: show options | show ips | show results | show scans")
+            self.perror("Usage: show options | show ips | show results | show scans\n")
 
 
     def _show_options(self):
-        self.poutput("\nOpciones actuales:")
+        self.poutput("\nCurrent options:")
         for k, v in self.settings.items():
             if k == "ips":
                 count = len(v)
                 if count == 0:
                     self.poutput("  ips       : []")
                 elif count > 10:
-                    self.poutput(f"  ips       : {count} IPs (usar 'show ips')")
+                    self.poutput(f"  ips       : {count} IPs (use 'show ips')")
                 else:
                     self.poutput(f"  ips       : {v}")
             else:
@@ -148,10 +175,10 @@ class ScannerCLI(Cmd):
         rows = get_results()
 
         if not rows:
-            self.poutput("\nNo hay resultados guardados.\n")
+            self.poutput("\nThere are no saved results.\n")
             return
 
-        self.poutput("\n=== Resultados del escaneo ===\n")
+        self.poutput("\n=== Scan results ===\n")
 
         last_ip = None
         for row in rows:
@@ -165,7 +192,7 @@ class ScannerCLI(Cmd):
             if port is not None:
                 self.poutput(f"    - {port}")
             else:
-                self.poutput("    (sin puertos abiertos)")
+                self.poutput("    (no open ports)")
         self.poutput("")
 
 
@@ -174,23 +201,24 @@ class ScannerCLI(Cmd):
         scans = list_scans()
 
         if not scans:
-            self.poutput("No hay scans registrados.")
+            self.poutput("There are no registered scans.")
             return
-        self.poutput("\nScans disponibles:")
+        self.poutput("\nAvailable scans:")
         for sid, ts in scans:
             self.poutput(f" {sid}: {ts}")
         self.poutput("")
 
 
     def do_enable(self, arg):
-        """
-        enable <plugin>
-        enable plugin <plugin>
-        enable plugin <p1> <p2> <p3>
+        """\n Enables a plugin for usage.
+        Usage:
+            enable <plugin>
+            enable plugin <plugin>
+            enable plugin <p1> <p2> <p3>
         """
         args = arg.split()
         if not args:
-            self.perror("Uso: enable <plugin> | enable plugin <plugin1> <plugin2>")
+            self.perror("Usage: enable <plugin> | enable plugin <plugin1> <plugin2>\n")
             return
 
         if args[0] == "plugin":
@@ -198,7 +226,7 @@ class ScannerCLI(Cmd):
 
         for name in args:
             if name not in self.plugins:
-                self.perror(f"Plugin no encontrado: {name}")
+                self.perror(f"Plugin not found: {name}")
                 continue
 
             self.plugins[name]["enabled"] = True
@@ -207,18 +235,19 @@ class ScannerCLI(Cmd):
             if name not in self.settings["plugins"]:
                 self.settings["plugins"].append(name)
 
-            self.poutput(f"[+] Plugin habilitado: {name}")
+            self.poutput(f"[+] Plugin enabled: {name}")
 
 
     def do_disable(self, arg):
-        """
-        disable <plugin>
-        disable plugin <plugin>
-        disable all
+        """\n Disables a plugin.
+        Usage:
+            disable <plugin>
+            disable plugin <plugin>
+            disable all
         """
         args = arg.split()
         if not args:
-            self.perror("Uso: disable <plugin> | disable all")
+            self.perror("Usage: disable <plugin> | disable all\n")
             return
 
         # disable all plugins
@@ -226,7 +255,7 @@ class ScannerCLI(Cmd):
             for name in self.plugins:
                 self.plugins[name]["enabled"] = False
             self.settings["plugins"].clear()
-            self.poutput("[+] Todos los plugins fueron deshabilitados")
+            self.poutput("[+] All plugins were disabled.")
             return
 
         # permite "disable plugin X"
@@ -235,7 +264,7 @@ class ScannerCLI(Cmd):
 
         for name in args:
             if name not in self.plugins:
-                self.perror(f"Plugin no encontrado: {name}")
+                self.perror(f"Plugin not found: {name}")
                 continue
 
             self.plugins[name]["enabled"] = False
@@ -243,13 +272,13 @@ class ScannerCLI(Cmd):
             if name in self.settings["plugins"]:
                 self.settings["plugins"].remove(name)
 
-            self.poutput(f"[-] Plugin deshabilitado: {name}")
+            self.poutput(f"[-] Plugin disabled: {name}")
 
 
     # --- AUTOCOMPLETADO PARA ENABLE ---
     def complete_enable(self, text, line, begidx, endidx):
         """
-        Autocompleta:
+        Autocompletes:
             enable <plugin>
             enable plugin <plugin>
         """
@@ -273,7 +302,7 @@ class ScannerCLI(Cmd):
     # --- AUTOCOMPLETADO PARA DISABLE ---
     def complete_disable(self, text, line, begidx, endidx):
         """
-        Autocompleta:
+        Autocompletes:
             disable <plugin>
             disable plugin <plugin>
             disable all
@@ -301,31 +330,37 @@ class ScannerCLI(Cmd):
 
     # --- RUN ---
     def do_run(self, arg):
+        """\n\n Runs the scan on a set of IPs, on a file containing IPs or on a previously made scan.
+        Usage:
+            run scan
+            run plugins on <file>
+            run plugins on <scan_id>
+        """
         parts = arg.split()
         if arg.strip() == "scan":
             return self._run_scan_real()
         elif parts[:3] == ["plugins", "on", "file"]:
             if len(parts) != 4:
-                self.perror("Uso: run plugins on file <ruta.txt>")
+                self.perror("Usage: run plugins on file <route.txt>\n")
                 return
             path = parts[3]
             return self._run_plugins_on_file(path)
         elif parts[:2] == ["plugins", "on"]:
             if len(parts) != 3:
-                self.perror("Uso: run plugins on <scan_id>")
+                self.perror("Usage: run plugins on <scan_id>\n")
                 return
             try:
                 scan_id = int(parts[2])
             except:
-                self.perror("scan_id debe ser un número")
+                self.perror("scan_id must be a number")
                 return
             return self._run_plugins_on_scan(scan_id)
         else:
-            self.perror("Uso: run scan | run plugins on <scan_id> | run plugins on file <path>")
+            self.perror("Usage: run scan | run plugins on <scan_id> | run plugins on file <path>\n")
 
 
     def _run_plugins_on_scan(self, scan_id):
-        self.poutput(f"\nEjecutando plugins sobre scan {scan_id}...\n")
+        self.poutput(f"\nRunning plugins on scan {scan_id}...\n")
 
         enabled = [name for name, st in self.plugins.items() if st["enabled"]]
         plugins = [(name, p) for name, p in load_plugins() if name in enabled]
@@ -351,9 +386,9 @@ class ScannerCLI(Cmd):
                 try:
                     plugin.run(ip, ports, scan_id, save)
                 except Exception as e:
-                    self.poutput(f"[!] Error en plugin {name}: {e}")
+                    self.poutput(f"[!] Error on plugin {name}: {e}")
 
-        self.poutput("\nPlugins ejecutados sobre el scan.\n")
+        self.poutput("\nPlugins finished.\n")
 
 
     def _run_plugins_on_file(self, path):
@@ -361,7 +396,7 @@ class ScannerCLI(Cmd):
         sin escanear puertos ni crear un nuevo scan."""
 
         if not os.path.isfile(path):
-            self.perror(f"Archivo no encontrado: {path}")
+            self.perror(f"File not found: {path}")
             return
 
         # Cargar IPs del archivo
@@ -372,15 +407,15 @@ class ScannerCLI(Cmd):
                 if ip and is_valid_ip(ip):
                     ips.append(ip)
                 else:
-                    self.poutput(f"[!] IP inválida en archivo: {ip}")
+                    self.poutput(f"[!] Invalid IP in file: {ip}")
 
         if not ips:
-            self.perror("El archivo no contiene IPs válidas.")
+            self.perror("File doesn't contain valid IPs")
             return
 
         # Crear un nuevo scan_id lógico (no escanea puertos)
         scan_id = create_scan()
-        self.poutput(f"\n[*] Nuevo scan_id creado para plugins: {scan_id}\n")
+        self.poutput(f"\n[*] New scan_id created for plugins: {scan_id}\n")
 
         # Guardamos IPs en la tabla scan_ips, sin puertos
         from core.database import add_ip, save_scan_ip
@@ -393,10 +428,10 @@ class ScannerCLI(Cmd):
         plugins = [(name, p) for name, p in load_plugins() if name in enabled]
 
         if not plugins:
-            self.poutput("No hay plugins habilitados.")
+            self.poutput("There are no enabled plugins")
             return
 
-        self.poutput(f"Ejecutando plugins sobre {len(ips)} IPs...\n")
+        self.poutput(f"Running plugins on {len(ips)} IPs...\n")
 
         for name, plugin in plugins:
             save = make_save_function(scan_id, name)
@@ -405,9 +440,9 @@ class ScannerCLI(Cmd):
                 try:
                     plugin.run(ip, [], scan_id, save)   # sin puertos
                 except Exception as e:
-                    self.poutput(f"[!] Error en plugin {name}: {e}")
+                    self.poutput(f"[!] Error on plugin {name}: {e}")
 
-        self.poutput(f"\nPlugins ejecutados. Nuevo scan_id: {scan_id}\n")
+        self.poutput(f"\nPlugins finished. New scan_id: {scan_id}\n")
 
 
     def _run_scan_real(self):
@@ -420,29 +455,29 @@ class ScannerCLI(Cmd):
         timeout = self.settings["timeout"]
 
         if not ips:
-            self.perror("No hay IPs configuradas. Use: set ips <ip1> <ip2> ...")
+            self.perror("There are no configured IPs. Use: set ips <ip1> <ip2> ...")
             return
 
         scan_id = create_scan()
-        self.poutput(f"[*] Nuevo scan_id creado: {scan_id}")
-        self.poutput("\n=== NetScout — Escaneo iniciado ===\n")
+        self.poutput(f"[*] New scan_id created: {scan_id}")
+        self.poutput("\n=== NetScout — Scan started ===\n")
 
         def cb_ip_start(ip):
-            self.poutput(f"[+] Iniciando {ip}")
+            self.poutput(f"[+] Scanning {ip}")
             # Linkeamos dirección ip a tabla de scan:
             ip_id = add_ip(ip)
             save_scan_ip(scan_id, ip_id)
 
         def cb_port_open(ip, port):
-            self.poutput(f"    └── Puerto abierto: {port}")
+            self.poutput(f"    └── Open port: {port}")
             ip_id = add_ip(ip)
             add_port(ip_id, port, scan_id)
 
         def cb_ip_end(ip, open_ports):
             if open_ports:
-                self.poutput(f"[=] {ip} finalizado: {open_ports}")
+                self.poutput(f"[=] {ip} finished: {open_ports}")
             else:
-                self.poutput(f"[-] {ip} finalizado sin puertos abiertos")
+                self.poutput(f"[-] {ip} finished: no open ports")
         
         # Ejecutamos el escaneo real
         try:
@@ -457,13 +492,13 @@ class ScannerCLI(Cmd):
                 on_ip_end=cb_ip_end,
             )
         except Exception as e:
-            self.perror(f"Error al escanear: {e}")
+            self.perror(f"Error during scan: {e}")
             return
 
-        self.poutput("\n=== Escaneo base terminado ===\n")
+        self.poutput("\n=== Base scan finished ===\n")
 
         
-        self.poutput("\n=== Ejecutando plugins ===")
+        self.poutput("\n=== Running plugins ===")
         enabled = self.settings["plugins"]
         plugins = [(name, plugin) for name, plugin in load_plugins() if name in enabled]
 
@@ -473,10 +508,45 @@ class ScannerCLI(Cmd):
                 try:
                     plugin.run(ip, open_ports, scan_id, save)
                 except Exception as e:
-                    self.poutput(f"[!] Error en plugin {name}: {e}")
-        self.poutput("\n=== Plugins ejecutados ===\n")
+                    self.poutput(f"[!] Error on plugin {name}: {e}")
+        self.poutput("\n=== Plugins finished ===\n")
+
+
+    def do_help(self, arg):
+        """\n Shows general help or help about a specific command."""
+        if arg:
+            return super().do_help(arg)
+
+        self.poutput("\n=== NetScout Command Reference ===\n")
+
+        sections = {
+            "Configuration": [
+                "set", "show options", "show ips"
+            ],
+            "Plugins": [
+                "enable", "disable", "show plugins"
+            ],
+            "Execution": [
+                "run scan", "run plugins on <id>", "run plugins on file <path>"
+            ],
+            "Results": [
+                "show scans", "show results", "show results scan <id>", "export ips <scan>"
+            ],
+            "System": [
+                "help", "exit"
+            ]
+        }
+
+        for title, cmds in sections.items():
+            self.poutput(f"--- {title} ---")
+            for c in cmds:
+                self.poutput(f"  {c}")
+            self.poutput("")
+
+        self.poutput("Use:  help <command>  for detailed help.\n")
 
 
     def do_exit(self, arg):
-        self.poutput("¡Hasta luego!")
+        """Finishes execution"""
+        self.poutput("")
         return True

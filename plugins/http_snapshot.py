@@ -25,4 +25,4 @@ def run(ip, ports, scan_id, save):
         save("snapshot_length", str(len(resp.text)), ip)
         save("snapshot_html", text, ip)   # se guarda truncado
 
-        print(f"[snapshot] guardado HTML inicial de {ip} ({len(text)} chars)")
+        print(f"[snapshot] saved initial HTML of {ip} ({len(text)} chars)")

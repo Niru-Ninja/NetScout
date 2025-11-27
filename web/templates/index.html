@@ -20,9 +20,9 @@
 
     {% if selected_scan %}
     <form method="post" action="/delete_scan/{{ selected_scan }}"
-          onsubmit="return confirm('¿Seguro que querés borrar el scan {{ selected_scan }}?');">
+          onsubmit="return confirm('Are you sure you want to delete {{ selected_scan }}?');">
       <button type="submit" style="background-color:#d9534f; color:white; border:none; padding:6px 12px; cursor:pointer;">
-        🗑️ Borrar este Scan
+        🗑️ Delete this scan
       </button>
     </form>
     {% endif %}
@@ -30,15 +30,15 @@
     <form method="get" action="/" style="margin-bottom: 15px;">
         <input type="hidden" name="scan" value="{{ selected_scan }}">
 
-        <input id="searchInput" type="text" name="q" placeholder="Buscar..." 
+        <input id="searchInput" type="text" name="q" placeholder="Search..." 
                style="width:300px;" value="{{ request.args.get('q','') }}">
 
-        <button type="submit">Buscar</button>
+        <button type="submit">Search</button>
 
         <!-- Botón exportar -->
         <a id="exportLink" href="#" 
            style="margin-left:10px; padding:6px 12px; background:#5bc0de; color:white; text-decoration:none; border-radius:4px;">
-            Exportar IPs
+            Export IPs
         </a>
     </form>
 
@@ -67,7 +67,7 @@
         <thead>
             <tr>
                 <th>IP</th>
-                <th>Puertos</th>
+                <th>Ports</th>
                 <th>Plugins</th>
             </tr>
         </thead>
