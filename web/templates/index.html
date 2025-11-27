@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>NetScout Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <h1>NetScout Dashboard</h1>
+
+    <form method="get" action="/" style="margin-bottom: 20px;">
+        <label for="scan">Seleccionar Scan:</label>
+        <select name="scan" id="scan" onchange="this.form.submit()">
+            {% for scan in scans %}
+                <option value="{{ scan.id }}" {% if scan.id == selected_scan %}selected{% endif %}>
+                    Scan {{ scan.id }} — {{ scan.timestamp }}
+                </option>
+            {% endfor %}
+        </select>
+    </form>
+
+    {% if selected_scan %}
+    <form method="post" action="/delete_scan/{{ selected_scan }}"
+          onsubmit="return confirm('¿Seguro que querés borrar el scan {{ selected_scan }}?');">
+      <button type="submit" style="background-color:#d9534f; color:white; border:none; padding:6px 12px; cursor:pointer;">
+        🗑️ Borrar este Scan
+      </button>
+    </form>
+    {% endif %}
+
+    <form method="get" action="/" style="margin-bottom: 15px;">
+        <input type="hidden" name="scan" value="{{ selected_scan }}">
+
+        <input id="searchInput" type="text" name="q" placeholder="Buscar..." 
+               style="width:300px;" value="{{ request.args.get('q','') }}">
+
+        <button type="submit">Buscar</button>
+
+        <!-- Botón exportar -->
+        <a id="exportLink" href="#" 
+           style="margin-left:10px; padding:6px 12px; background:#5bc0de; color:white; text-decoration:none; border-radius:4px;">
+            Exportar IPs
+        </a>
+    </form>
+
+    <script>
+    function updateExportLink() {
+        const scanId = "{{ selected_scan }}";
+        const search = document.getElementById("searchInput").value.trim();
+        const link = document.getElementById("exportLink");
+
+        let url = `/export_ips/${scanId}`;
+        if (search !== "") {
+            url += `?search=${encodeURIComponent(search)}`;
+        }
+        link.href = url;
+    }
+
+    // Actualiza al escribir
+    document.getElementById("searchInput").addEventListener("input", updateExportLink);
+
+    // Inicializa al cargar
+    updateExportLink();
+    </script>
+
+
+    <table>
+        <thead>
+            <tr>
+                <th>IP</th>
+                <th>Puertos</th>
+                <th>Plugins</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for row in results %}
+            <tr>
+                <td>{{ row.ip }}</td>
+
+                <td>
+                    {% if row.ports %}
+                        {{ row.ports|join(', ') }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+
+                <td>
+                    {% if row.plugins %}
+                    <ul>
+                        {% for p in row.plugins %}
+                            <li>
+                                <b>{{ p.plugin }}</b>: {{ p.key }} — {{ p.value }}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
